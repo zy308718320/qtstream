@@ -152,7 +152,7 @@ impl QuickTime {
             Err(_) => return Err(Error::new(ErrorKind::InvalidData, "packet as_bytes")),
         };
 
-        println!("write data {:#2x?}", buf);
+        // println!("write data {:#2x?}", buf);
 
         match self.device.write_bulk(buf) {
             Ok(e) => Ok(e),

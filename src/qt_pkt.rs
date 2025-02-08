@@ -124,7 +124,7 @@ impl QTPacket {
             ));
         }
 
-        println!("read data {:#2x?}", data);
+        // println!("read data {:#2x?}", data);
 
         let mut cur = Cursor::new(Vec::from(&data[..pkt_len]));
 

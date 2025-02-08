@@ -18,6 +18,12 @@ Thank's for [quicktime_video_hack](https://github.com/danielpaulus/quicktime_vid
 $: cargo run
 ```
 
+## Play
+
+```bash
+$: ffplay -f h264 -fflags nobuffer -flags low_delay -framedrop -strict experimental tcp://localhost:12345
+```
+
 ## H.264 to MP4
 
 fps rate calculate not correct. and I can't figure out.
