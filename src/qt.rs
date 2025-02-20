@@ -194,22 +194,6 @@ impl QuickTime {
         correlation_id: u64,
     ) -> Result<(), Error> {
         match magic {
-            qt_pkt::SYNC_PACKET_MAGIC_OG => {
-                let og_pkt = match qt_pkt::QTPacketOG::from_packet(pkt) {
-                    Ok(e) => e,
-                    Err(e) => return Err(e),
-                };
-
-                let mut reply_packet = match og_pkt.reply_packet(correlation_id) {
-                    Ok(e) => e,
-                    Err(e) => return Err(e),
-                };
-
-                match self.write(&mut reply_packet) {
-                    Err(e) => return Err(e),
-                    _ => {}
-                }
-            }
             qt_pkt::SYNC_PACKET_MAGIC_CWPA => {
                 let cwpa_pkt = match qt_pkt::QTPacketCWPA::from_packet(pkt) {
                     Ok(e) => e,
@@ -221,6 +205,13 @@ impl QuickTime {
                 self.local_audio_clock = Some(Clock::new_with_host_time(device_clock_ref));
 
                 self.device_audio_clock = Some(cwpa_pkt.device_clock_ref());
+
+
+                let mut reply_packet = match cwpa_pkt.reply_packet(correlation_id, device_clock_ref)
+                {
+                    Ok(e) => e,
+                    Err(e) => return Err(e),
+                };
 
                 let display_device_info = qt_hpd1_device_info();
                 let audio_device_info = qt_hpa1_device_info();
@@ -238,25 +229,15 @@ impl QuickTime {
                     _ => {}
                 }
 
-                let mut reply_packet = match cwpa_pkt.reply_packet(correlation_id, device_clock_ref)
-                {
-                    Ok(e) => e,
-                    Err(e) => return Err(e),
-                };
-
-                let display_pkt_buf = match display_pkt.as_bytes() {
-                    Ok(e) => e,
-                    Err(e) => return Err(e),
-                };
-
-                match reply_packet.write(display_pkt_buf) {
+                match self.write(&mut display_pkt) {
                     Err(e) => return Err(e),
                     _ => {}
-                };
+                }
+
 
                 match self.write(&mut reply_packet) {
-                    Err(e) => return Err(e),
-                    _ => {}
+                  Err(e) => return Err(e),
+                  _ => {}
                 }
 
                 let mut audio_pkt = match QTPacketASYN::new(
@@ -275,6 +256,22 @@ impl QuickTime {
                     _ => {}
                 }
             }
+            qt_pkt::SYNC_PACKET_MAGIC_AFMT => {
+              let afmt_pkt = match QTPacketAFMT::from_packet(pkt) {
+                  Ok(e) => e,
+                  Err(e) => return Err(e),
+              };
+
+              let mut reply_packet = match afmt_pkt.reply_packet(correlation_id) {
+                  Ok(e) => e,
+                  Err(e) => return Err(e),
+              };
+
+              match self.write(&mut reply_packet) {
+                  Err(e) => return Err(e),
+                  _ => {}
+              }
+          }
             qt_pkt::SYNC_PACKET_MAGIC_CVRP => {
                 let cvrp_pkt = match qt_pkt::QTPacketCVRP::from_packet(pkt) {
                     Ok(e) => e,
@@ -332,22 +329,6 @@ impl QuickTime {
                     )
                     .expect("qt packet time reply");
             }
-            qt_pkt::SYNC_PACKET_MAGIC_AFMT => {
-                let afmt_pkt = match QTPacketAFMT::from_packet(pkt) {
-                    Ok(e) => e,
-                    Err(e) => return Err(e),
-                };
-
-                let mut reply_packet = match afmt_pkt.reply_packet(correlation_id) {
-                    Ok(e) => e,
-                    Err(e) => return Err(e),
-                };
-
-                match self.write(&mut reply_packet) {
-                    Err(e) => return Err(e),
-                    _ => {}
-                }
-            }
             qt_pkt::SYNC_PACKET_MAGIC_SKEW => {
                 let stlac = self
                     .start_time_local_audio_clock
@@ -376,11 +357,29 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
+                println!("SKEW reply_packet {:#2X?}", pkt);
+
                 match self.write(&mut pkt) {
                     Err(e) => return Err(e),
                     _ => {}
                 };
             }
+            qt_pkt::SYNC_PACKET_MAGIC_OG => {
+              let og_pkt = match qt_pkt::QTPacketOG::from_packet(pkt) {
+                  Ok(e) => e,
+                  Err(e) => return Err(e),
+              };
+
+              let mut reply_packet = match og_pkt.reply_packet(correlation_id) {
+                  Ok(e) => e,
+                  Err(e) => return Err(e),
+              };
+
+              match self.write(&mut reply_packet) {
+                  Err(e) => return Err(e),
+                  _ => {}
+              }
+          }
             qt_pkt::SYNC_PACKET_MAGIC_STOP => {
                 let mut pkt = match QTPacketSTOP::new().reply_packet(correlation_id) {
                     Ok(e) => e,
@@ -408,6 +407,7 @@ impl QuickTime {
     ) -> Result<(), Error> {
         match magic {
             qt_pkt::ASYN_PACKET_MAGIC_EAT => {
+                print!("EAT -> audio \n");
                 let sample_buffer = match SampleBuffer::from_qt_packet(pkt, MEDIA_TYPE_SOUND) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
@@ -470,10 +470,12 @@ impl QuickTime {
                 };
             }
             qt_pkt::ASYN_PACKET_MAGIC_SPRP => {}
-            qt_pkt::ASYN_PACKET_MAGIC_TJMP => {}
             qt_pkt::ASYN_PACKET_MAGIC_SRAT => {}
             qt_pkt::ASYN_PACKET_MAGIC_TBAS => {}
+            qt_pkt::ASYN_PACKET_MAGIC_TJMP => {}
             qt_pkt::ASYN_PACKET_MAGIC_RELS => {}
+            qt_pkt::ASYN_PACKET_MAGIC_HPA0 => {}
+            qt_pkt::ASYN_PACKET_MAGIC_HPD0 => {}
             _ => {}
         }
         Ok(())

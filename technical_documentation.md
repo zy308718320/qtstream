@@ -399,7 +399,7 @@ Send this to stop the device from streaming
 
 | 4 Byte Length (20)   |4 Byte Magic (ASYN)   | 8 Byte empty clock CFTypeID  |  4 bytes magic (HPD0) |
 |---|---|---|---|
-|14000000| 6E797361| 01000000 00000000 |30617068 | 
+|14000000| 6E797361| 01000000 00000000 |30647068 | 
 
 ##### 3.3.9 Asyn HPA0 - Tell the device to stop audio streaming
 

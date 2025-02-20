@@ -286,6 +286,8 @@ pub const ASYN_PACKET_MAGIC_TJMP: u32 = 0x746A6D70;
 pub const ASYN_PACKET_MAGIC_SRAT: u32 = 0x73726174;
 pub const ASYN_PACKET_MAGIC_TBAS: u32 = 0x74626173;
 pub const ASYN_PACKET_MAGIC_RELS: u32 = 0x72656C73;
+pub const ASYN_PACKET_MAGIC_HPA0: u32 = 0x68706130;
+pub const ASYN_PACKET_MAGIC_HPD0: u32 = 0x68706430;
 
 pub struct QTPacketCWPA {
     device_clock_ref: u64,
