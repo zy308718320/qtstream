@@ -97,6 +97,7 @@ fn main() {
     let mut udid = None;
     let mut port = Some(12345u16); // Default port
     let mut include_header = false;
+    let mut no_audio = false;
 
     // Parse command line arguments
     let mut i = 0;
@@ -112,6 +113,9 @@ fn main() {
             }
             "-i" => {
                 include_header = true;
+            }
+            "-na" => {
+                no_audio = true;
             }
             _ => {}
         }
@@ -159,7 +163,7 @@ fn main() {
         Receiver<Result<SampleBuffer, io::Error>>,
     ) = mpsc::sync_channel(256);
 
-    let mut qt = QuickTime::new(usb_device, tx);
+    let mut qt = QuickTime::new(usb_device, tx, no_audio);
 
     match qt.init() {
         Err(e) => {

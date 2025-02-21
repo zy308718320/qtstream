@@ -15,11 +15,12 @@ use std::sync::Arc;
 
 pub struct QuickTime {
     device: AppleDevice,
+    no_audio: bool,
     term: Arc<AtomicBool>,
     clock: Option<Clock>,
     need_clock_ref: Option<u64>,
     local_audio_clock: Option<Clock>,
-    device_audio_clock: Option<u64>,
+    device_audio_clock_ref: Option<u64>,
     start_time_local_audio_clock: Option<Time>,
     last_eat_frame_received_local_audio_clock: Option<Time>,
     start_time_device_audio_clock: Option<Time>,
@@ -42,15 +43,19 @@ impl AsRef<QuickTime> for QuickTime {
 }
 
 impl QuickTime {
-    pub fn new(device: AppleDevice, tx: SyncSender<Result<SampleBuffer, Error>>) -> QuickTime {
-
+    pub fn new(
+        device: AppleDevice,
+        tx: SyncSender<Result<SampleBuffer, Error>>,
+        no_audio: bool,
+    ) -> QuickTime {
         return QuickTime {
             device,
+            no_audio,
             term: Arc::new(AtomicBool::new(false)),
             clock: None,
             need_clock_ref: None,
             local_audio_clock: None,
-            device_audio_clock: None,
+            device_audio_clock_ref: None,
             start_time_local_audio_clock: None,
             last_eat_frame_received_local_audio_clock: None,
             start_time_device_audio_clock: None,
@@ -152,7 +157,7 @@ impl QuickTime {
             Err(_) => return Err(Error::new(ErrorKind::InvalidData, "packet as_bytes")),
         };
 
-        // println!("write data {:#2x?}", buf);
+        // println!("write data {:02X?}", buf);
 
         match self.device.write_bulk(buf) {
             Ok(e) => Ok(e),
@@ -195,6 +200,7 @@ impl QuickTime {
     ) -> Result<(), Error> {
         match magic {
             qt_pkt::SYNC_PACKET_MAGIC_CWPA => {
+                println!("READ CWPA {:#2X?}", pkt);
                 let cwpa_pkt = match qt_pkt::QTPacketCWPA::from_packet(pkt) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
@@ -204,8 +210,7 @@ impl QuickTime {
 
                 self.local_audio_clock = Some(Clock::new_with_host_time(device_clock_ref));
 
-                self.device_audio_clock = Some(cwpa_pkt.device_clock_ref());
-
+                self.device_audio_clock_ref = Some(cwpa_pkt.device_clock_ref());
 
                 let mut reply_packet = match cwpa_pkt.reply_packet(correlation_id, device_clock_ref)
                 {
@@ -214,7 +219,6 @@ impl QuickTime {
                 };
 
                 let display_device_info = qt_hpd1_device_info();
-                let audio_device_info = qt_hpa1_device_info();
 
                 let mut display_pkt =
                     match QTPacketASYN::new(Some(display_device_info), HPD1, EMPTY_CF_TYPE)
@@ -224,55 +228,59 @@ impl QuickTime {
                         Err(e) => return Err(e),
                     };
 
+                println!("WRITE CWPA HPD1 {:#2X?}", display_pkt);
                 match self.write(&mut display_pkt) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
 
-                match self.write(&mut display_pkt) {
-                    Err(e) => return Err(e),
-                    _ => {}
-                }
-
-
+                println!("WRITE CWPA {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
-                  Err(e) => return Err(e),
-                  _ => {}
+                    Err(e) => return Err(e),
+                    _ => {}
                 }
 
-                let mut audio_pkt = match QTPacketASYN::new(
-                    Some(audio_device_info),
-                    HPA1,
-                    cwpa_pkt.device_clock_ref(),
-                )
-                .as_qt_packet()
-                {
+                if !self.no_audio {
+                    let audio_device_info = qt_hpa1_device_info();
+
+                    let mut audio_pkt = match QTPacketASYN::new(
+                        Some(audio_device_info),
+                        HPA1,
+                        cwpa_pkt.device_clock_ref(),
+                    )
+                    .as_qt_packet()
+                    {
+                        Ok(e) => e,
+                        Err(e) => return Err(e),
+                    };
+
+                    println!("WRITE CWPA HPA1 {:#2X?}", audio_pkt);
+                    match self.write(&mut audio_pkt) {
+                        Err(e) => return Err(e),
+                        _ => {}
+                    }
+                }
+            }
+            qt_pkt::SYNC_PACKET_MAGIC_AFMT => {
+                println!("READ AFMT {:#2X?}", pkt);
+                let afmt_pkt = match QTPacketAFMT::from_packet(pkt) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
                 };
 
-                match self.write(&mut audio_pkt) {
+                let mut reply_packet = match afmt_pkt.reply_packet(correlation_id) {
+                    Ok(e) => e,
+                    Err(e) => return Err(e),
+                };
+
+                println!("WRITE AFMT {:#2X?}", reply_packet);
+                match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
             }
-            qt_pkt::SYNC_PACKET_MAGIC_AFMT => {
-              let afmt_pkt = match QTPacketAFMT::from_packet(pkt) {
-                  Ok(e) => e,
-                  Err(e) => return Err(e),
-              };
-
-              let mut reply_packet = match afmt_pkt.reply_packet(correlation_id) {
-                  Ok(e) => e,
-                  Err(e) => return Err(e),
-              };
-
-              match self.write(&mut reply_packet) {
-                  Err(e) => return Err(e),
-                  _ => {}
-              }
-          }
             qt_pkt::SYNC_PACKET_MAGIC_CVRP => {
+                println!("READ CVRP {:#2X?}", pkt);
                 let cvrp_pkt = match qt_pkt::QTPacketCVRP::from_packet(pkt) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
@@ -287,6 +295,7 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
+                println!("WRITE CVRP NEED {:#2X?}", need_pkt);
                 match self.write(&mut need_pkt) {
                     Err(e) => return Err(e),
                     _ => {}
@@ -300,12 +309,14 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
+                println!("WRITE CVRP {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
             }
             qt_pkt::SYNC_PACKET_MAGIC_CLOK => {
+                println!("READ CLOK {:#2X?}", pkt);
                 let host_time = clock_ref + 0x10000;
 
                 self.clock = Some(Clock::new_with_host_time(host_time));
@@ -316,20 +327,30 @@ impl QuickTime {
                         Ok(e) => e,
                     };
 
+                println!("WRITE CLOK {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
             }
             qt_pkt::SYNC_PACKET_MAGIC_TIME => {
-                QTPacketTIME::new()
-                    .reply_packet(
-                        correlation_id,
-                        self.clock.as_ref().expect("clock none").get_time(),
-                    )
-                    .expect("qt packet time reply");
+                println!("READ TIME {:#2X?}", pkt);
+                let mut reply_packet = match QTPacketTIME::new().reply_packet(
+                    correlation_id,
+                    self.clock.as_ref().expect("clock none").get_time(),
+                ) {
+                    Err(e) => return Err(e),
+                    Ok(e) => e,
+                };
+
+                println!("WRITE TIME {:#2X?}", reply_packet);
+                match self.write(&mut reply_packet) {
+                    Err(e) => return Err(e),
+                    _ => {}
+                }
             }
             qt_pkt::SYNC_PACKET_MAGIC_SKEW => {
+                println!("READ SKEW {:#2X?}", pkt);
                 let stlac = self
                     .start_time_local_audio_clock
                     .as_ref()
@@ -357,35 +378,38 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
-                println!("SKEW reply_packet {:#2X?}", pkt);
-
+                println!("WRITE SKEW {:#2X?}", pkt);
                 match self.write(&mut pkt) {
                     Err(e) => return Err(e),
                     _ => {}
                 };
             }
             qt_pkt::SYNC_PACKET_MAGIC_OG => {
-              let og_pkt = match qt_pkt::QTPacketOG::from_packet(pkt) {
-                  Ok(e) => e,
-                  Err(e) => return Err(e),
-              };
+                println!("READ OG {:#2X?}", pkt);
+                let og_pkt = match qt_pkt::QTPacketOG::from_packet(pkt) {
+                    Ok(e) => e,
+                    Err(e) => return Err(e),
+                };
 
-              let mut reply_packet = match og_pkt.reply_packet(correlation_id) {
-                  Ok(e) => e,
-                  Err(e) => return Err(e),
-              };
+                let mut reply_packet = match og_pkt.reply_packet(correlation_id) {
+                    Ok(e) => e,
+                    Err(e) => return Err(e),
+                };
 
-              match self.write(&mut reply_packet) {
-                  Err(e) => return Err(e),
-                  _ => {}
-              }
-          }
+                println!("WRITE OG {:#2X?}", reply_packet);
+                match self.write(&mut reply_packet) {
+                    Err(e) => return Err(e),
+                    _ => {}
+                }
+            }
             qt_pkt::SYNC_PACKET_MAGIC_STOP => {
+                println!("READ STOP {:#2X?}", pkt);
                 let mut pkt = match QTPacketSTOP::new().reply_packet(correlation_id) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
                 };
 
+                println!("WRITE STOP {:#2X?}", pkt);
                 match self.write(&mut pkt) {
                     Err(e) => return Err(e),
                     _ => {}
@@ -407,7 +431,6 @@ impl QuickTime {
     ) -> Result<(), Error> {
         match magic {
             qt_pkt::ASYN_PACKET_MAGIC_EAT => {
-                print!("EAT -> audio \n");
                 let sample_buffer = match SampleBuffer::from_qt_packet(pkt, MEDIA_TYPE_SOUND) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
@@ -482,7 +505,7 @@ impl QuickTime {
     }
 
     fn close_session(&mut self) -> Result<(), Error> {
-        match self.device_audio_clock {
+        match self.device_audio_clock_ref {
             Some(clock) => {
                 let mut off_audio = match QTPacketASYN::new(None, HPA0, clock).as_qt_packet() {
                     Err(e) => return Err(e),
@@ -541,7 +564,7 @@ impl QuickTime {
                     self.handle_pkt(&mut pkt, false).expect("asyn");
                 }
                 _ => {
-                    println!("magic: PACKET_MAGIC_UNKNOWN {:#2x?}", magic);
+                    println!("magic: PACKET_MAGIC_UNKNOWN {:#2X?}", magic);
                 }
             };
         }

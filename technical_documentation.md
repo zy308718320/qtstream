@@ -135,7 +135,7 @@ Call setActiveConfiguration on that config and you can claim the new endpoint fo
 11. reply with the local video clockRef
 12. start sending ASYN NEED with the device's video clockRef
 13. receive two ASYN Set Properties
-14. receive Sync Clok and reply with newly created clock
+14. receive SYNC CLOK and reply with newly created clock
 15. receive two SYNC TIME and reply with two CMTimes 
 ### 2.2 Receive data
 FEED and EAT! Packets for video and audio will be sent by the device.
