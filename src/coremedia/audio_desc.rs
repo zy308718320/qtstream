@@ -136,7 +136,7 @@ impl AudioStreamDescription {
             sample_rate: 48000f64,
             format_flags: 12,
             format_id: AUDIO_FORMAT_ID_LPCM,
-            bytes_per_packet: 1,
+            bytes_per_packet: 4,
             frames_per_packet: 1,
             bytes_per_frame: 4,
             channels_per_frame: 2,

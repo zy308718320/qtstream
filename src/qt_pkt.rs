@@ -229,7 +229,7 @@ impl Debug for QTPacket {
             format!(
                 "pkt_len: {}\npkt_buf: {}",
                 self.inner.get_ref().len(),
-                hex::encode(self.inner.get_ref().as_slice())
+                hex::encode_upper(self.inner.get_ref().as_slice())
             )
             .as_str(),
         )

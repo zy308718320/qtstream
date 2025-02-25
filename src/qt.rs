@@ -157,8 +157,6 @@ impl QuickTime {
             Err(_) => return Err(Error::new(ErrorKind::InvalidData, "packet as_bytes")),
         };
 
-        // println!("write data {:02X?}", buf);
-
         match self.device.write_bulk(buf) {
             Ok(e) => Ok(e),
             Err(e) => Err(Error::new(
@@ -200,7 +198,6 @@ impl QuickTime {
     ) -> Result<(), Error> {
         match magic {
             qt_pkt::SYNC_PACKET_MAGIC_CWPA => {
-                println!("READ CWPA {:#2X?}", pkt);
                 let cwpa_pkt = match qt_pkt::QTPacketCWPA::from_packet(pkt) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
@@ -228,13 +225,11 @@ impl QuickTime {
                         Err(e) => return Err(e),
                     };
 
-                println!("WRITE CWPA HPD1 {:#2X?}", display_pkt);
                 match self.write(&mut display_pkt) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
 
-                println!("WRITE CWPA {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
@@ -254,7 +249,6 @@ impl QuickTime {
                         Err(e) => return Err(e),
                     };
 
-                    println!("WRITE CWPA HPA1 {:#2X?}", audio_pkt);
                     match self.write(&mut audio_pkt) {
                         Err(e) => return Err(e),
                         _ => {}
@@ -262,7 +256,6 @@ impl QuickTime {
                 }
             }
             qt_pkt::SYNC_PACKET_MAGIC_AFMT => {
-                println!("READ AFMT {:#2X?}", pkt);
                 let afmt_pkt = match QTPacketAFMT::from_packet(pkt) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
@@ -273,14 +266,12 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
-                println!("WRITE AFMT {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
             }
             qt_pkt::SYNC_PACKET_MAGIC_CVRP => {
-                println!("READ CVRP {:#2X?}", pkt);
                 let cvrp_pkt = match qt_pkt::QTPacketCVRP::from_packet(pkt) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
@@ -295,7 +286,6 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
-                println!("WRITE CVRP NEED {:#2X?}", need_pkt);
                 match self.write(&mut need_pkt) {
                     Err(e) => return Err(e),
                     _ => {}
@@ -309,14 +299,12 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
-                println!("WRITE CVRP {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
             }
             qt_pkt::SYNC_PACKET_MAGIC_CLOK => {
-                println!("READ CLOK {:#2X?}", pkt);
                 let host_time = clock_ref + 0x10000;
 
                 self.clock = Some(Clock::new_with_host_time(host_time));
@@ -327,14 +315,12 @@ impl QuickTime {
                         Ok(e) => e,
                     };
 
-                println!("WRITE CLOK {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
             }
             qt_pkt::SYNC_PACKET_MAGIC_TIME => {
-                println!("READ TIME {:#2X?}", pkt);
                 let mut reply_packet = match QTPacketTIME::new().reply_packet(
                     correlation_id,
                     self.clock.as_ref().expect("clock none").get_time(),
@@ -343,14 +329,12 @@ impl QuickTime {
                     Ok(e) => e,
                 };
 
-                println!("WRITE TIME {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
             }
             qt_pkt::SYNC_PACKET_MAGIC_SKEW => {
-                println!("READ SKEW {:#2X?}", pkt);
                 let stlac = self
                     .start_time_local_audio_clock
                     .as_ref()
@@ -378,14 +362,12 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
-                println!("WRITE SKEW {:#2X?}", pkt);
                 match self.write(&mut pkt) {
                     Err(e) => return Err(e),
                     _ => {}
                 };
             }
             qt_pkt::SYNC_PACKET_MAGIC_OG => {
-                println!("READ OG {:#2X?}", pkt);
                 let og_pkt = match qt_pkt::QTPacketOG::from_packet(pkt) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
@@ -396,20 +378,17 @@ impl QuickTime {
                     Err(e) => return Err(e),
                 };
 
-                println!("WRITE OG {:#2X?}", reply_packet);
                 match self.write(&mut reply_packet) {
                     Err(e) => return Err(e),
                     _ => {}
                 }
             }
             qt_pkt::SYNC_PACKET_MAGIC_STOP => {
-                println!("READ STOP {:#2X?}", pkt);
                 let mut pkt = match QTPacketSTOP::new().reply_packet(correlation_id) {
                     Ok(e) => e,
                     Err(e) => return Err(e),
                 };
 
-                println!("WRITE STOP {:#2X?}", pkt);
                 match self.write(&mut pkt) {
                     Err(e) => return Err(e),
                     _ => {}
