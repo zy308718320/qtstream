@@ -19,9 +19,13 @@ $: cargo run
 ```
 
 ## Play
-
+  
 ```bash
-$: ffplay -f h264 -fflags nobuffer -flags low_delay -framedrop -strict experimental tcp://localhost:12345
+video h264 stream
+$: ffplay -f h264 -fflags nobuffer -flags low_delay -framedrop tcp://localhost:12345
+
+audio lpcm stream
+$: ffplay -f s16le -fflags nobuffer -flags low_delay -ar 48000 -ch_layout 2 tcp://localhost:12346
 ```
 
 ## H.264 to MP4

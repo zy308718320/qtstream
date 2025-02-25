@@ -26,7 +26,8 @@ pub struct QuickTime {
     start_time_device_audio_clock: Option<Time>,
     last_eat_frame_received_device_audio_clock: Option<Time>,
     packet_pool: Cursor<Vec<u8>>,
-    tx: SyncSender<Result<SampleBuffer, Error>>,
+    video_tx: SyncSender<Result<SampleBuffer, Error>>,
+    audio_tx: SyncSender<Result<SampleBuffer, Error>>,
 }
 
 const HPD1: u32 = 0x68706431;
@@ -45,7 +46,8 @@ impl AsRef<QuickTime> for QuickTime {
 impl QuickTime {
     pub fn new(
         device: AppleDevice,
-        tx: SyncSender<Result<SampleBuffer, Error>>,
+        video_tx: SyncSender<Result<SampleBuffer, Error>>,
+        audio_tx: SyncSender<Result<SampleBuffer, Error>>,
         no_audio: bool,
     ) -> QuickTime {
         return QuickTime {
@@ -61,7 +63,8 @@ impl QuickTime {
             start_time_device_audio_clock: None,
             last_eat_frame_received_device_audio_clock: None,
             packet_pool: Cursor::new(Vec::new()),
-            tx,
+            video_tx,
+            audio_tx,
         };
     }
 
@@ -439,7 +442,7 @@ impl QuickTime {
                     );
                 }
 
-                match self.tx.send(Ok(sample_buffer)) {
+                match self.audio_tx.send(Ok(sample_buffer)) {
                     Err(e) => return Err(Error::new(ErrorKind::BrokenPipe, e.to_string())),
                     _ => {}
                 };
@@ -466,7 +469,7 @@ impl QuickTime {
                     _ => {}
                 };
 
-                match self.tx.send(Ok(sample_buffer)) {
+                match self.video_tx.send(Ok(sample_buffer)) {
                     Err(e) => return Err(Error::new(ErrorKind::BrokenPipe, e.to_string())),
                     _ => {}
                 };
@@ -548,7 +551,11 @@ impl QuickTime {
             };
         }
 
-        self.tx
+        self.video_tx
+            .send(Err(Error::new(ErrorKind::BrokenPipe, "manual closed")))
+            .expect("send close to channel");
+
+        self.audio_tx
             .send(Err(Error::new(ErrorKind::BrokenPipe, "manual closed")))
             .expect("send close to channel");
 
