@@ -550,15 +550,7 @@ impl QuickTime {
                 }
             };
         }
-
-        self.video_tx
-            .send(Err(Error::new(ErrorKind::BrokenPipe, "manual closed")))
-            .expect("send close to channel");
-
-        self.audio_tx
-            .send(Err(Error::new(ErrorKind::BrokenPipe, "manual closed")))
-            .expect("send close to channel");
-
+        
         Ok(())
     }
 }
