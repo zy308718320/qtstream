@@ -17,6 +17,7 @@ use rusty_libimobiledevice::error::IdeviceError;
 use rusty_libimobiledevice::idevice;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::{Arc, Mutex};
 use std::{io, thread};
 
 fn get_apple_device() -> Result<idevice::Device, IdeviceError> {
@@ -66,25 +67,27 @@ fn main() {
         i += 1;
     }
 
-    let device = match get_apple_device() {
-        Ok(d) => d,
-        Err(e) => {
-            println!("get_apple_device: {:?}", e);
-            return;
-        }
-    };
-
-    let lockdownd = match device.new_lockdownd_client("qtstream") {
-        Ok(client) => client,
-        Err(e) => {
-            println!("new_lockdownd_client: {:?}", e);
-            return;
-        }
-    };
-
     let sn = if let Some(u) = udid {
         u
     } else {
+        println!("No udid specified, trying to find a device");
+        
+        let device = match get_apple_device() {
+            Ok(d) => d,
+            Err(e) => {
+                println!("get_apple_device: {:?}", e);
+                return;
+            }
+        };
+
+        let lockdownd = match device.new_lockdownd_client("qtstream") {
+            Ok(client) => client,
+            Err(e) => {
+                println!("new_lockdownd_client: {:?}", e);
+                return;
+            }
+        };
+
         match lockdownd.get_device_udid() {
             Ok(sn) => sn,
             Err(e) => {
@@ -93,7 +96,7 @@ fn main() {
             }
         }
     };
-
+    
     let usb_device = match apple::get_usb_device(sn.replace("-", "").as_str()) {
         Ok(d) => d,
         Err(e) => {
@@ -122,12 +125,18 @@ fn main() {
         _ => {}
     }
 
-    let qtt = thread::spawn(move || match qt.run() {
-        Err(e) => {
-            drop(qt);
-            println!("quick time loop exit: {}", e)
+    let qt = Arc::new(Mutex::new(qt));
+    let qt_clone = Arc::clone(&qt);
+
+    let qtt = thread::spawn(move || {
+        let mut qt = qt.lock().unwrap();
+        match qt.run() {
+            Err(e) => {
+                drop(qt);
+                println!("qt loop exit: {}", e)
+            }
+            _ => {}
         }
-        _ => {}
     });
 
     let video_port = port.unwrap_or(12345);
@@ -153,5 +162,7 @@ fn main() {
 
     vt.join().expect("video thread term");
 
-    qtt.join().expect("quicktime thread term");
+    qtt.join().expect("qt thread term");
+
+    drop(qt_clone.lock().unwrap());
 }

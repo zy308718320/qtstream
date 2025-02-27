@@ -550,13 +550,12 @@ impl QuickTime {
                 }
             };
         }
-        
+
         Ok(())
     }
-}
 
-impl Drop for QuickTime {
-    fn drop(&mut self) {
+    pub fn stop(&mut self) {
+        println!("stop qt");
         self.close_session().expect("close session failed");
 
         match self.device.is_qt_enabled() {
@@ -574,5 +573,11 @@ impl Drop for QuickTime {
                 println!("dispose failed {}", e);
             }
         };
+    }
+}
+
+impl Drop for QuickTime {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
