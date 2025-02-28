@@ -5,12 +5,15 @@ use std::io::Write;
 use std::net::TcpListener;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct TcpServer {
     address: String,
     rx: Receiver<Result<SampleBuffer, io::Error>>,
     media_type: u32,
     include_header: bool,
+    connected_state: Option<Arc<AtomicBool>>,
 }
 
 impl AsRef<TcpServer> for TcpServer {
@@ -25,12 +28,14 @@ impl TcpServer {
         rx: Receiver<Result<SampleBuffer, io::Error>>,
         media_type: u32,
         include_header: Option<bool>,
+        connected_state: Option<Arc<AtomicBool>>,
     ) -> TcpServer {
         return TcpServer {
             address,
             rx,
             media_type,
             include_header: include_header.unwrap_or(false),
+            connected_state,
         };
     }
 
@@ -67,6 +72,10 @@ impl TcpServer {
     }
 
     fn handle_send(&self, mut stream: std::net::TcpStream) {
+        if let Some(state) = &self.connected_state {
+            state.store(true, Ordering::SeqCst);
+        }
+
         loop {
             let message = match self.rx.try_recv() {
                 Ok(msg) => msg,

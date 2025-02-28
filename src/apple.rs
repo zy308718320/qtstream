@@ -150,22 +150,20 @@ impl AppleDevice {
         };
 
         let buffer: [u8; 0] = [];
-
+        
         match self.handle.write_control(
             rusb::request_type(Direction::Out, RequestType::Vendor, Recipient::Device),
             0x52,
             0x00,
             index,
             &buffer,
-            Duration::from_secs(5),
+            Duration::from_secs(2),
         ) {
             Err(e) => return Err(e),
             _ => {}
         };
 
         if enabled {
-            sleep(Duration::from_secs(1));
-
             let context = match Context::new() {
                 Ok(ctx) => ctx,
                 Err(e) => return Err(e),
@@ -194,11 +192,11 @@ impl AppleDevice {
                     break;
                 }
 
-                sleep(Duration::from_millis(500));
+                sleep(Duration::from_millis(50));
             }
         }
 
-        return Ok(true);
+        Ok(true)
     }
 
     pub fn clear_feature(&self) -> Option<Error> {

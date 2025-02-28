@@ -18,6 +18,7 @@ use rusty_libimobiledevice::idevice;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::AtomicBool;
 use std::{io, thread};
 
 fn get_apple_device() -> Result<idevice::Device, IdeviceError> {
@@ -71,7 +72,7 @@ fn main() {
         u
     } else {
         println!("No udid specified, trying to find a device");
-        
+
         let device = match get_apple_device() {
             Ok(d) => d,
             Err(e) => {
@@ -96,7 +97,7 @@ fn main() {
             }
         }
     };
-    
+
     let usb_device = match apple::get_usb_device(sn.replace("-", "").as_str()) {
         Ok(d) => d,
         Err(e) => {
@@ -104,6 +105,15 @@ fn main() {
             return;
         }
     };
+
+    let video_port = port.unwrap_or(12345);
+    let audio_port = video_port + 1;
+
+    let video_addr = format!("0.0.0.0:{}", video_port);
+    let audio_addr = format!("0.0.0.0:{}", audio_port);
+
+    let audio_connected = Arc::new(AtomicBool::new(false));
+    let audio_connected_clone = audio_connected.clone();
 
     let (video_tx, video_rx): (
         SyncSender<Result<SampleBuffer, io::Error>>,
@@ -115,7 +125,10 @@ fn main() {
         Receiver<Result<SampleBuffer, io::Error>>,
     ) = mpsc::sync_channel(256);
 
-    let mut qt = QuickTime::new(usb_device, video_tx, audio_tx, no_audio);
+    let mut qt = QuickTime::new(usb_device, video_tx, audio_tx, no_audio, audio_connected.clone());
+
+    let video_server = TcpServer::new(video_addr, video_rx, MEDIA_TYPE_VIDEO, Some(include_header), None);
+    let audio_server = TcpServer::new(audio_addr, audio_rx, MEDIA_TYPE_SOUND, None, Some(audio_connected_clone));
 
     match qt.init() {
         Err(e) => {
@@ -125,6 +138,16 @@ fn main() {
         _ => {}
     }
 
+    let vt = thread::spawn(move || {
+        video_server.run();
+    });
+
+    let at = thread::spawn(move || {
+        if !no_audio {
+            audio_server.run();
+        }
+    });
+
     let qt = Arc::new(Mutex::new(qt));
     let qt_clone = Arc::clone(&qt);
 
@@ -132,33 +155,13 @@ fn main() {
         let mut qt = qt.lock().unwrap();
         match qt.run() {
             Err(e) => {
-                drop(qt);
                 println!("qt loop exit: {}", e)
             }
             _ => {}
         }
     });
 
-    let video_port = port.unwrap_or(12345);
-    let audio_port = video_port + 1;
-
-    let video_addr = format!("0.0.0.0:{}", video_port);
-    let audio_addr = format!("0.0.0.0:{}", audio_port);
-
-    let video_server = TcpServer::new(video_addr, video_rx, MEDIA_TYPE_VIDEO, Some(include_header));
-    let audio_server = TcpServer::new(audio_addr, audio_rx, MEDIA_TYPE_SOUND, None);
-
-    let vt = thread::spawn(move || {
-        video_server.run();
-    });
-
-    if !no_audio {
-        let at = thread::spawn(move || {
-            audio_server.run();
-        });
-
-        at.join().expect("audio thread term");
-    }
+    at.join().expect("audio thread term");
 
     vt.join().expect("video thread term");
 

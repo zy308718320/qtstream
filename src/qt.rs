@@ -28,6 +28,7 @@ pub struct QuickTime {
     packet_pool: Cursor<Vec<u8>>,
     video_tx: SyncSender<Result<SampleBuffer, Error>>,
     audio_tx: SyncSender<Result<SampleBuffer, Error>>,
+    audio_connected: Arc<AtomicBool>,
 }
 
 const HPD1: u32 = 0x68706431;
@@ -49,6 +50,7 @@ impl QuickTime {
         video_tx: SyncSender<Result<SampleBuffer, Error>>,
         audio_tx: SyncSender<Result<SampleBuffer, Error>>,
         no_audio: bool,
+        audio_connected: Arc<AtomicBool>,
     ) -> QuickTime {
         return QuickTime {
             device,
@@ -65,6 +67,7 @@ impl QuickTime {
             packet_pool: Cursor::new(Vec::new()),
             video_tx,
             audio_tx,
+            audio_connected,
         };
     }
 
@@ -442,10 +445,7 @@ impl QuickTime {
                     );
                 }
 
-                match self.audio_tx.send(Ok(sample_buffer)) {
-                    Err(e) => return Err(Error::new(ErrorKind::BrokenPipe, e.to_string())),
-                    _ => {}
-                };
+                self.handle_audio_sample(sample_buffer)?;
             }
             qt_pkt::ASYN_PACKET_MAGIC_FEED => {
                 let sample_buffer = match SampleBuffer::from_qt_packet(pkt, MEDIA_TYPE_VIDEO) {
@@ -573,6 +573,13 @@ impl QuickTime {
                 println!("dispose failed {}", e);
             }
         };
+    }
+
+    fn handle_audio_sample(&self, sample: SampleBuffer) -> Result<(), Error> {
+        if self.audio_connected.load(Ordering::SeqCst) {
+            self.audio_tx.send(Ok(sample)).map_err(|_| Error::new(ErrorKind::BrokenPipe, "send error"))?;
+        }
+        Ok(())
     }
 }
 
